@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+
+import os
+import json
+import csv
+import time
+import random
+import sys
+import requests
+
+
+pdir = os.path.dirname(os.path.abspath(__file__))
+cve_map = None
+exploit_id = []
+exploit_data = []
+cves_with_exploit = []
+#searchsploit_dir = '/opt/exploitdb/' #others
+searchsploit_dir = '/usr/share/exploitdb' #kali
+
+
+def search(data, status_file=False):
+
+    if status_file:
+        os.system("debsecan --status " + data + " | cut -d ' ' -f 1 > .temp")
+
+        # basically a list. one or more cves
+        CVEs = open(".temp").read().split('\n')[:-1]
+    else:
+        # just the one cve
+        CVEs = [data]
+
+    with open(pdir + "/edb2cve") as data_file:
+        cve_map = json.load(data_file)
+
+    with open(searchsploit_dir + "files_exploits.csv") as files_exploits_reader:
+        files_exploits = csv.reader(files_exploits_reader)
+        next(files_exploits)
+        files_exploits = list(files_exploits)
+    for i in files_exploits:
+        exploit_id.append(i[0])
+        exploit_data.append(i[1:])
+    # dont require this anymore. lets free up some memory
+    del files_exploits
+
+    for cve in CVEs:
+        if cve in cve_map:
+            cves_with_exploit.append([cve, cve_map[cve]])
+
+    print()
+    for cve in cves_with_exploit:
+
+        # cve id
+        print(cve[0])
+
+        for e_id in cve[1]:
+            e_path = exploit_data[exploit_id.index(e_id)][0]
+            e_description = exploit_data[exploit_id.index(e_id)][1]
+
+            # in case the output is piped
+            try:
+                columns = os.get_terminal_size()[0]
+            except:
+                columns = 80
+
+            spaces = columns-len(e_path)-len(e_description)-7
+            if spaces < 0:
+                e_description = e_description[:spaces]
+            print(' ' * 4, e_description , ' ' * spaces, e_path)
+        print()
+
+
+def update():
+    nvd_link = "https://nvd.nist.gov/vuln/detail/CVE-"
+    edb_link = "https://www.exploit-db.com/exploits/"
+    headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+
+    with open(searchsploit_dir + "files_exploits.csv") as files_exploits_reader:
+        files_exploits = csv.reader(files_exploits_reader)
+        next(files_exploits)
+        files_exploits = list(files_exploits)
+    for i in files_exploits:
+        exploit_id.append(int(i[0]))
+    # dont require this anymore. lets free up some memory
+    del files_exploits
+
+    with open(pdir + "/edb2cve") as data_file:
+        cve_map = json.load(data_file)
+
+    print("Loaded Database...")
+
+    cve_map_ids = []
+    for cve in cve_map:
+        for ids in cve_map[cve]:
+            cve_map_ids.append(int(ids))
+
+    # reversing to get the newer exploits first
+    new_edb_ids = [i for i in exploit_id if i not in cve_map_ids][::-1]
+
+    print("Calculated Diff...")
+    print("Updating Database... This takes about 45 minutes.")
+    print("The update will be auto-resumed if statsploit gets terminated.")
+
+    for edb_id in new_edb_ids:
+        try:
+            t = time.time()
+            page = requests.get(edb_link+str(edb_id), headers=headers).text
+
+            t = time.time()
+            start = page.find(nvd_link)
+
+            # some exploits dont have a cve
+            if start == -1:
+                continue
+
+            else:
+                end = page.find(' ', start+1)
+                cve = page[start+len(nvd_link)-4:end-2].replace("\u2013", '-')
+
+                print(cve, '--> EDB-ID:', edb_id)
+
+                if cve in cve_map:
+                    cve_map[cve].append(str(edb_id))
+                else:
+                    cve_map[cve] = [str(edb_id)]
+        except:
+            with open("edb2cve", 'w') as edb:
+                json.dump(cve_map, edb, indent=2)
+
+            # in case we get throttled...
+            print("\nThrottled! Press Ctrl+C to quit.")
+            time.sleep(5)
+
+        time.sleep(random.uniform(0.1, 0.3))
+
+    with open("edb2cve", 'w') as edb:
+        json.dump(cve_map, edb, indent=2)
+
+
+def main():
+    if len(sys.argv) == 1:
+        help()
+    elif len(sys.argv) == 2:
+        argv = sys.argv[1]
+        if argv == '-h' or argv == '--help':
+            help()
+        elif argv == '-u' or argv == '--update':
+            update()
+        # by CVE ID
+        elif argv.upper().startswith('CVE-'):
+            _cve, y, n = argv.split('-')
+            if y.isdigit() and n.isdigit():
+                search(argv.upper())
+            else:
+                print("Invalid CVE ID!")
+        elif os.path.exists(argv):
+            search(argv, True)
+
+    else:
+        print("Invalid parameters supplied!")
+
+if __name__ == "__main__":
+    main()
