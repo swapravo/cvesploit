@@ -136,6 +136,13 @@ def update():
         json.dump(cve_map, edb, indent=2)
 
 
+def help():
+    print("\ncvesploit: Find SearchSploit exploits by CVE-IDs / dpkg status file")
+    print("\nUsage:")
+    print("\n\tcvesploit CVE-2018-11776\n\tcvesploit /path/to/dpkg/status/file\n\tcvesploit -u/--update")
+    print("\n\n-->https://github.com/swapravo/cvesploit<--\n\n")
+
+
 def main():
     if len(sys.argv) == 1:
         help()

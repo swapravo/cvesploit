@@ -1,6 +1,6 @@
 # cvesploit
 
-## Filter SearchSploit using CVE-IDs / dpkg status file
+## Find SearchSploit exploits by CVE-IDs / dpkg status file
 
 <br/>
 
