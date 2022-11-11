@@ -15,7 +15,7 @@ exploit_id = []
 exploit_data = []
 cves_with_exploit = []
 #searchsploit_dir = '/opt/exploitdb/' #others
-searchsploit_dir = '/usr/share/exploitdb' #kali
+searchsploit_dir = '/usr/share/exploitdb/' #kali
 
 
 def search(data, status_file=False):
